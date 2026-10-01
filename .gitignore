@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+reports/
+src/web/data/*.db
+src/web/data/*.db-shm
+src/web/data/*.db-wal
+scripts/MFG/generated/*.py
+tftp/*
+!tftp/.gitkeep

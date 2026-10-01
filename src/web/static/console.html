@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>ProTech-MFG — 即時 Console</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    main { display: flex; flex-direction: column; height: calc(100vh - 3rem); }
+    .console-top {
+      display: flex; gap: 0.5rem; padding: 0.5rem 1rem; align-items: center;
+      background: #0f3460; flex-wrap: wrap;
+    }
+    .console-top button {
+      padding: 0.3rem 0.8rem; border: none; border-radius: 4px; cursor: pointer;
+      background: #64b5f6; color: #000; font-weight: bold;
+    }
+    .console-top label { font-size: 0.85rem; display: flex; align-items: center; gap: 0.3rem; }
+    .status-pill { font-size: 0.8rem; padding: 0.2rem 0.6rem; border-radius: 999px; }
+    .st-on  { background: #1b5e20; color: #a5d6a7; }
+    .st-off { background: #5a1e1e; color: #ef9a9a; }
+    #console-out {
+      flex: 1; margin: 0.5rem 1rem 1rem; background: #000; color: #d0d0d0;
+      font-family: monospace; font-size: 0.78rem; line-height: 1.35;
+      padding: 0.75rem; border-radius: 6px; overflow-y: auto; white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .meta { font-size: 0.78rem; color: #9fb3c8; margin-left: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🖥️ 即時 Console</h1>
+    <nav>
+      <a href="/">積木編輯</a>
+      <a href="/dashboard">監控面板</a>
+      <a href="/editor">檔案編輯</a>
+      <a href="/console">即時 Console</a>
+    </nav>
+  </header>
+
+  <div class="console-top">
+    <span id="ws-status" class="status-pill st-off">● 未連線</span>
+    <button onclick="reconnect()">🔄 重新連線</button>
+    <button onclick="clearOut()">🧹 清除畫面</button>
+    <label><input type="checkbox" id="autoscroll" checked> 自動捲動</label>
+    <span class="meta" id="log-meta">log: —</span>
+  </div>
+
+  <main>
+    <div id="console-out"></div>
+  </main>
+
+  <script>
+    var ws = null;
+    var out = document.getElementById("console-out");
+    var statusEl = document.getElementById("ws-status");
+    var metaEl = document.getElementById("log-meta");
+    var reconnectTimer = null;
+
+    // Cap the buffer so long-running sessions don't exhaust browser memory.
+    var MAX_CHARS = 500000;
+
+    function setStatus(connected) {
+      statusEl.textContent = connected ? "● 已連線" : "● 未連線";
+      statusEl.className = "status-pill " + (connected ? "st-on" : "st-off");
+    }
+
+    function append(text) {
+      out.textContent += text;
+      if (out.textContent.length > MAX_CHARS) {
+        out.textContent = out.textContent.slice(out.textContent.length - MAX_CHARS);
+      }
+      if (document.getElementById("autoscroll").checked) {
+        out.scrollTop = out.scrollHeight;
+      }
+    }
+
+    function clearOut() { out.textContent = ""; }
+
+    async function refreshMeta() {
+      try {
+        var r = await fetch("/api/console/status");
+        var d = await r.json();
+        metaEl.textContent = d.available
+          ? "log: " + d.active_log
+          : "log: (尚無 — 確認 ser2net 是否啟動於 " + d.log_dir + ")";
+      } catch (e) {
+        metaEl.textContent = "log: (狀態查詢失敗)";
+      }
+    }
+
+    function connect() {
+      var proto = location.protocol === "https:" ? "wss" : "ws";
+      ws = new WebSocket(proto + "://" + location.host + "/ws/console");
+
+      ws.onopen = function () {
+        setStatus(true);
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      };
+      ws.onmessage = function (ev) { append(ev.data); };
+      ws.onclose = function () {
+        setStatus(false);
+        // Auto-reconnect after a short delay.
+        reconnectTimer = setTimeout(connect, 2000);
+      };
+      ws.onerror = function () { try { ws.close(); } catch (e) {} };
+    }
+
+    function reconnect() {
+      if (ws) { try { ws.close(); } catch (e) {} }
+      clearOut();
+      connect();
+      refreshMeta();
+    }
+
+    refreshMeta();
+    connect();
+    setInterval(refreshMeta, 10000);
+  </script>
+</body>
+</html>

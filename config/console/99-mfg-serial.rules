@@ -1,0 +1,47 @@
+# ProTech-MFG — stable device names for the test-bench USB serial/power devices.
+#
+# Why: /dev/ttyUSB* numbering is not stable (it depends on USB enumeration
+# order and can change between /dev/ttyUSB0 and /dev/ttyUSB1 across reboots or
+# re-plugs). This causes ser2net (DUT console) and pyftdi (FT232H power relay)
+# to point at the wrong device. We bind stable symlinks by USB VID:PID.
+#
+# Bind rule (chosen: by VID:PID — best for "one bench = one DUT at a time"):
+#   PL2303 DUT console  067b:2303  -> /dev/mfg-console   (e.g. EAP111)
+#   CH340  DUT console  1a86:7523  -> /dev/mfg-console   (e.g. Pi7a / QCC748)
+#   FT232H power relay  0403:6014  -> /dev/mfg-power
+#
+# Different DUTs use different USB-serial chips for their console (EAP111 uses
+# PL2303, Pi7a/QCC748 uses CH340). Since only ONE DUT is attached at a time,
+# we map BOTH chips to the same /dev/mfg-console symlink, so ser2net (which
+# points at /dev/mfg-console) works regardless of which DUT is connected.
+#
+# NOTE: If you ever attach TWO console chips at once (e.g. EAP111 + Pi7a
+# simultaneously) they would both claim mfg-console — switch to distinct names
+# (mfg-console-eap / mfg-console-pi7) or USB-port-path binding (see bottom).
+#
+# Install:
+#   sudo cp config/console/99-mfg-serial.rules /etc/udev/rules.d/99-mfg-serial.rules
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger
+#   # verify:
+#   ls -l /dev/mfg-console /dev/mfg-power
+#
+# After this, point ser2net at /dev/mfg-console (see config/console/ser2net.yaml)
+# and re-run:  sudo systemctl restart ser2net
+
+# --- DUT console: Prolific PL2303 (e.g. EAP111) -> /dev/mfg-console ---
+SUBSYSTEM=="tty", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", SYMLINK+="mfg-console"
+
+# --- DUT console: QinHeng CH340 (e.g. Pi7a / QCC748) -> /dev/mfg-console ---
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="mfg-console"
+
+# --- Power relay: FTDI FT232H -> /dev/mfg-power ---
+# The FT232H exposes an FTDI interface; when unbound from ftdi_sio (see
+# tools/setup_ft232h_gpio.sh) pyftdi accesses it directly by VID:PID
+# (ftdi://ftdi:232h/1), so this symlink is mainly for identification.
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6014", SYMLINK+="mfg-power"
+
+# --- Alternative: bind by physical USB port path (use if multiple same-chip
+#     devices are attached; replace the KERNELS value with your actual port,
+#     e.g. from: udevadm info -q property -n /dev/ttyUSB0 | grep DEVPATH ) ---
+# SUBSYSTEM=="tty", KERNELS=="1-4.4.2", SYMLINK+="mfg-console"

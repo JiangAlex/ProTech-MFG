@@ -1,0 +1,33 @@
+# MFG station definitions — data-driven, OPEN & EXTENSIBLE.
+#
+# A "station" is a manufacturing test stage distinguished by its SCRIPT/flow
+# (not by test-bench instance). Stations are an open set: add sub-stations
+# (e.g. PT1, PT2, FT1) by appending entries here — do NOT hard-code station
+# codes in program logic.
+#
+# Design principles (see docs/kiro-memory.md 續 10):
+#   - Open & extensible: add a station = add an entry here.
+#   - Blocks are SHARED across stations: the toolbox is organized by platform/
+#     SoC (MT7981 / QCC74x) + common blocks, NOT by station. A station's script
+#     just selects & arranges the shared blocks differently.
+#   - One script per (model × station).
+#
+# `code` is the machine value stored on scripts (ManufacturingScript.station)
+# and in run records; `name` is the human label shown in the GUI dropdown.
+stations:
+  - code: PT
+    name: "PT"
+    description: "初測 / 板級測試 — primary/board-level test (basic functions at board stage)."
+  - code: FT
+    name: "FT"
+    description: "組合後測試 — function test after assembly (whole-unit functional verify)."
+  - code: FDL
+    name: "FDL"
+    description: "韌體燒錄 — firmware download / flashing stage."
+  # Add sub-stations as needed, e.g.:
+  # - code: PT1
+  #   name: "PT1 — 初測階段一"
+  #   description: "..."
+  # - code: PT2
+  #   name: "PT2 — 初測階段二"
+  #   description: "..."

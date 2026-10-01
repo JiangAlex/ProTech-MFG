@@ -1,0 +1,21 @@
+name: OAP101
+type: ap
+ports:
+  ethernet:
+    - {name: "eth0", speed: "1G"}
+  radio:
+    - {name: "radio0", bands: ["2G", "5G"], channels_2g: [1,6,11], channels_5g: [36,40,44,48]}
+api: ucentral
+commands:
+  set_ssid: "uci set wireless.default_radio0.ssid='{ssid}'"
+  set_band: "uci set wireless.radio0.band='{band}'"
+  set_channel: "uci set wireless.radio0.channel='{channel}'"
+  set_security_wpa2: |
+    uci set wireless.default_radio0.encryption='psk2'
+    uci set wireless.default_radio0.key='{password}'
+  set_security_wpa3: |
+    uci set wireless.default_radio0.encryption='sae'
+    uci set wireless.default_radio0.key='{password}'
+  set_security_open: "uci set wireless.default_radio0.encryption='none'"
+  apply: "uci commit wireless && wifi reload"
+  show_status: "iwinfo wlan0 info"

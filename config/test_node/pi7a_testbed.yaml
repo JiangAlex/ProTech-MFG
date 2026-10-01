@@ -1,0 +1,65 @@
+ap:
+  model: Pi7a
+  console:
+    # ser2net exposes the DUT serial as telnet (shared by scripts + GUI).
+    # Pi7a/QCC748 console runs at 2000000 (2M) baud — different from EAP111
+    # (115200). Both DUTs share ONE ser2net port (5001); console.py uses
+    # RFC2217 (pyserial rfc2217://) to negotiate THIS baudrate per-connection,
+    # so no separate port is needed. Baud confirmed from DUT banner
+    # "Pi7a Baud Rate:2000000".
+    type: telnet            # serial or telnet (ser2net)
+    port: 127.0.0.1:5001    # shared ser2net port; baudrate set via RFC2217
+    baudrate: 2000000       # Pi7a/QCC748 console = 2M baud (DUT banner)
+    prompt: "qcc74x />"     # QCC74x firmware CLI prompt (NOT U-Boot)
+    cmd_delay: 0
+    # Direct-serial fallback:
+    #   type: serial
+    #   port: /dev/mfg-console  (baud 2000000)
+  ssh:
+    ip: 192.168.1.1
+    user: root
+    password: ""            # Pi7a is a QCC74x MCU; no Linux SSH in MFG flow
+  power:
+    url: "ftdi://ftdi:232h/1"
+    relay: 1
+    active_high: false
+    off_delay: 2.0
+
+  # Model-specific manufacturing parameters for Pi7a (Qualcomm QCC744 / QCC74x).
+  #
+  # Platform note: Pi7a is a THIRD platform, different from EAP111 (MT7981
+  # U-Boot) and OAP101 (IPQ5018 U-Boot). There is NO U-Boot / no tftpboot flash
+  # flow — the firmware is pre-flashed and the MFG flow drives the QCC74x
+  # firmware CLI (prompt "qcc74x />"). This block therefore uses a QCC74x
+  # schema (CLI commands + expected strings + thresholds), NOT the EAP111-style
+  # U-Boot MTD offsets.
+  #
+  # Derived from the reference PASS log:
+  #   docs/logfiles/Pi7a-EC2617002807_PASS_N_1_132811.txt
+  #   (SN=EC2617002807, MAC=4445BA15E59C, Model=Pi7a-0825-WL, HWver=R0B)
+  #
+  # Core subset only (no Keysight ATE RF calibration). ATE is a separate stage.
+  mfg:
+    platform: qcc74x
+    console_prompt: "qcc74x />"       # QCC74x firmware CLI prompt
+    model: "Pi7a-0825-WL"             # written via `factory w ... <Model> ...`
+    hw_rev: "R0B"                     # written via `factory w ... <HWver>`
+    diag_version_expected: "Pi7_V0.3" # optional compare (empty = record only)
+    i2c_expected_addrs: ["0x30", "0x3F"]
+    fuel_gauge_v_min: 2.5             # SY6410 fuel gauge voltage limits (V)
+    fuel_gauge_v_max: 4.2
+    factory_write_cmd: "factory w"    # factory w <MAC(colon)> <SN> <Model> <HWver>
+    factory_read_cmd: "factory r"     # spec v0.5 §2.1.21; prints halow/wifi/ble mac + S/N + Model + HWver
+    led_cmd_on: "led all on"
+    led_cmd_off: "led off"
+    wdt_cmd: "wdt_reboot"             # spec v0.5 §2.1.6; triggers "Force WDT reboot after 6 seconds"
+    # TODO (confirm on real bench, not needed for core subset):
+    #   - console baudrate (log did not show it)
+    #   - whether reset button has a CLI alternative (log shows physical hold >=5s)
+    #   - setup_QCA.txt Connection_ComPort mapping (only needed for ATE stage)
+
+pc:
+  label: "Test PC"
+  ip: 192.168.1.2
+  user: root
+  password: ""

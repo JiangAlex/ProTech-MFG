@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>ProTech-MFG — 檔案編輯器</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>📝 檔案編輯器</h1>
+    <nav>
+      <a href="/">積木編輯</a>
+      <a href="/dashboard">監控面板</a>
+      <a href="/editor">檔案編輯</a>
+      <a href="/console">即時 Console</a>
+    </nav>
+  </header>
+  <main style="flex-direction: row;">
+    <aside id="file-tree" style="width:220px; padding:1rem; overflow-y:auto; background:#0f3460;"></aside>
+    <div style="flex:1; display:flex; flex-direction:column;">
+      <div style="padding:0.5rem; background:#16213e; display:flex; gap:0.5rem; align-items:center;">
+        <span id="current-file">未選擇檔案</span>
+        <button onclick="saveFile()">💾 儲存</button>
+      </div>
+      <textarea id="editor-area"></textarea>
+    </div>
+  </main>
+  <script>
+    var cm = CodeMirror.fromTextArea(document.getElementById('editor-area'), {
+      theme: 'dracula',
+      lineNumbers: true,
+      mode: 'yaml'
+    });
+    cm.setSize('100%', 'calc(100vh - 6rem)');
+
+    var currentPath = '';
+
+    async function loadFileTree() {
+      var resp = await fetch('/api/files');
+      var files = await resp.json();
+      var tree = document.getElementById('file-tree');
+      tree.innerHTML = '<h3>檔案</h3>' + files.map(f =>
+        '<div style="cursor:pointer;padding:2px 0;" onclick="loadFile(\'' + f + '\')">' + f + '</div>'
+      ).join('');
+    }
+
+    async function loadFile(path) {
+      currentPath = path;
+      document.getElementById('current-file').textContent = path;
+      var resp = await fetch('/api/files/' + encodeURIComponent(path));
+      var data = await resp.json();
+      cm.setValue(data.content);
+      cm.setOption('mode', path.endsWith('.py') ? 'python' : 'yaml');
+    }
+
+    async function saveFile() {
+      if (!currentPath) return;
+      await fetch('/api/files/' + encodeURIComponent(currentPath), {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({content: cm.getValue()})
+      });
+      alert('已儲存: ' + currentPath);
+    }
+
+    loadFileTree();
+  </script>
+</body>
+</html>

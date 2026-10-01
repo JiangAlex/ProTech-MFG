@@ -1,0 +1,103 @@
+ap:
+  model: EAP111
+  console:
+    # Access the console via ser2net (方案 B) so test scripts and the WLAN
+    # Test GUI can share the physical serial device without contention.
+    # ser2net exposes /dev/ttyUSB0 as telnet on 127.0.0.1:5001.
+    type: telnet            # serial or telnet (ser2net)
+    port: 127.0.0.1:5001    # host:port for ser2net; use /dev/ttyUSB0 for direct serial
+    baudrate: 115200        # informational only in telnet mode (baud set by ser2net)
+    prompt: "MT7981>"
+    # Delay (seconds) inserted BEFORE sending each U-Boot command, as a safety
+    # margin against command/output collisions on a busy console. 0 = no delay.
+    cmd_delay: 0
+    # Direct-serial fallback (only if ser2net is not running):
+    #   type: serial
+    #   port: /dev/ttyUSB0
+  ssh:
+    ip: 192.168.1.1
+    user: root
+    password: ""
+  tftp:
+    server_ip: 192.168.1.2
+    device_ip: 192.168.1.1
+    port: 69
+    directory: "/home/alex_chiang/projects/kiro-ATLAS/tftp"
+  # DUT power control via FT232H GPIO relays (PDU). The FT232H (VID:PID
+  # 0403:6014) drives two relays: C0=relay1 (DC Jack), C1=relay2 (spare).
+  # Requires the FT232H to be unbound from ftdi_sio and pyftdi installed
+  # (see docs/kiro-memory.md for the one-time manual setup).
+  power:
+    url: "ftdi://ftdi:232h/1"   # first FT232H by VID:PID; not /dev/ttyUSBx-dependent
+    relay: 1                     # DC Jack relay: C0=ACBUS0=1, C1=ACBUS1=2
+    active_high: false           # measured: pin LOW closes the relay (low-trigger board)
+    off_delay: 2.0               # seconds to stay OFF during a power-cycle
+
+  # Model-specific manufacturing parameters. ManufacturingScript reads these
+  # from ap.mfg (falling back to EAP111/MT7981 defaults in code). To add a new
+  # model, copy this block into its testbed and change the values.
+  mfg:
+    uboot_prompt: "MT7981>"
+    factory_read_cmd: "mtd read factory 0x46000000 0x0 0x800"
+    mac_eth0_offset: "0x4600002A"
+    mac_eth1_offset: "0x46000024"
+    mac_ar0_offset: "0x46000004"
+    sn_offset: "0x46000060"
+    model_offset: "0x46000070"
+    hw_rev_offset: "0x46000080"
+    flash_load_addr: "0x46000000"
+    fip_write_offset: "0x00380000"
+    fip_erase_size: "0x00200000"
+    fw_write_offset_1: "0x00580000"
+    fw_write_offset_2: "0x04580000"
+    fw_erase_size: "0x08000000"
+    sku: "EAP111(TE)"
+    model: "EAP111"
+    reference_design: "mt7981-spim-nand-rfb"
+    manufacturer_name: "EC"
+    manufacturer_url: "www.edge-core.com"
+    model_description: "802.11ax Dual-Band Enterprise Access Point"
+    certification_region: "WW"
+
+    # Multiple SKUs for this model. Selected via GUI SKU dropdown / --sku /
+    # MFG_SKU. The chosen SKU's keys override the ap.mfg values above (e.g.
+    # different firmware per SKU/customer). default_sku is used when none chosen.
+    default_sku: "TE"
+    skus:
+      TE:
+        sku: "EAP111(TE)"
+        certification_region: "WW"
+        fip_image: "tip_fip.bin"
+        fw_image: "openwrt-mediatek-mt7981-edgecore_eap111-squashfs-factory.bin"
+      TIP:
+        sku: "EAP111(TIP)"
+        certification_region: "WW"
+        fip_image: "tip_fip.bin"                 # TODO: confirm TIP FIP image if different
+        fw_image: "openwrt-mediatek-mt7981-edgecore_eap111-squashfs-factory.bin"  # TODO: confirm TIP firmware image
+      # Example additional SKU (customer/firmware variant) — fill in real values:
+      # WW:
+      #   sku: "EAP111(WW)"
+      #   certification_region: "WW"
+      #   fip_image: "tip_fip.bin"
+      #   fw_image: "openwrt-...-eap111-ww-...bin"
+
+pc:
+  label: "Test PC (4-port)"
+  ip: 192.168.1.2
+  user: root
+  password: ""
+  ports:
+    eth1:
+      ip: 192.168.1.2
+      connect_to: "ap1:eth0"
+    eth2:
+      ip: 192.168.2.2
+      connect_to: "ap1:eth1"
+    eth3:
+      ip: ""
+      connect_to: ""
+    eth4:
+      ip: ""
+      connect_to: ""
+  iperf:
+    server_port: 5201

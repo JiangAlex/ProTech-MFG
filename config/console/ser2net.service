@@ -1,0 +1,37 @@
+# kiro-ATLAS console server (ser2net) systemd unit
+#
+# The Ubuntu ser2net package already ships its own ser2net.service that reads
+# /etc/ser2net/ser2net.yaml, so normally you only need:
+#
+#     sudo systemctl restart ser2net
+#
+# Use THIS unit only if you want an explicit/override definition (e.g. custom
+# config path or to guarantee the log directory exists). Install with:
+#
+#     sudo cp config/console/ser2net.service /etc/systemd/system/ser2net.service
+#     sudo systemctl daemon-reload
+#     sudo systemctl enable --now ser2net
+#
+[Unit]
+Description=kiro-ATLAS Serial-to-Network Proxy (DUT console on /dev/ttyUSB0)
+Documentation=man:ser2net(8) man:ser2net.yaml(5)
+After=network.target
+# Only start if the USB serial device is present.
+Requires=dev-ttyUSB0.device
+After=dev-ttyUSB0.device
+
+[Service]
+Type=exec
+# Ensure the trace-read log directory exists before start.
+ExecStartPre=/usr/bin/install -d -m 0755 /var/log/ser2net
+# -n = do not daemonize (systemd manages the process);
+# -c = explicit config file path.
+ExecStart=/usr/sbin/ser2net -n -c /etc/ser2net/ser2net.yaml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=2
+# ser2net must run as root to open the root:dialout owned /dev/ttyUSB0.
+User=root
+
+[Install]
+WantedBy=multi-user.target

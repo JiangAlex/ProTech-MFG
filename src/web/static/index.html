@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ProTech-MFG — Blockly</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+  <script src="https://unpkg.com/blockly/python_compressed.js"></script>
+</head>
+<body>
+  <header>
+    <h1>🏭 ProTech-MFG</h1>
+    <nav>
+      <a href="/">積木編輯</a>
+      <a href="/dashboard">監控面板</a>
+      <a href="/editor">檔案編輯</a>
+      <a href="/console">即時 Console</a>
+    </nav>
+    <div style="margin-left:auto; display:flex; gap:0.5rem; align-items:center;">
+      <label>型號: <select id="dev-model" onchange="onModelChange()"></select></label>
+      <label id="sku-label" style="display:none;">SKU: <select id="dev-sku"></select></label>
+      <label>站別: <select id="dev-station" onchange="onStationChange()"><option value="">全部</option></select></label>
+    </div>
+  </header>
+
+  <main>
+    <div id="blockly-area">
+      <div id="blocklyDiv"></div>
+      <div id="atlas-notice" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.75); color:#fff; padding:1.5rem 2rem; border-radius:8px; text-align:center; font-size:1rem; pointer-events:none; z-index:10;">
+        📜 此腳本不支援積木編輯<br><small style="color:#aaa;">請參考右側 Python 原始碼，可直接執行</small>
+      </div>
+    </div>
+    <aside id="sidebar">
+      <h3>Python 預覽</h3>
+      <pre id="code-preview"></pre>
+      <div id="actions">
+        <input id="test-name" placeholder="測試名稱" value="GUI-001">
+        <input id="script-filter" list="script-list" placeholder="🔍 搜尋現有腳本..." onchange="onScriptSelect()" oninput="onScriptInput()">
+        <datalist id="script-list"></datalist>
+      </div>
+      <div style="display:flex; gap:0.5rem; margin:0.5rem 0;">
+        <button id="btn-save" onclick="saveTest()" style="flex:1; padding:0.4rem; border:none; border-radius:4px; cursor:pointer; background:#64b5f6; color:#000; font-weight:bold;">💾 儲存</button>
+        <button id="btn-save-as" onclick="saveTestAs()" style="flex:1; padding:0.4rem; border:none; border-radius:4px; cursor:pointer; background:#B39DDB; color:#000; font-weight:bold;">📄 另存為</button>
+        <button id="btn-run" onclick="runTest()" style="flex:1; padding:0.4rem; border:none; border-radius:4px; cursor:pointer; background:#4CAF50; color:#fff; font-weight:bold;">▶️ 執行</button>
+      </div>
+      <h3>執行結果 <span id="run-status"></span></h3>
+      <div id="run-output"></div>
+    </aside>
+  </main>
+
+  <!-- Scan popup modal: auto-shown when a running test asks to scan a
+       barcode/SN (backend prints "Please scan the barcode now ..."). -->
+  <div id="scan-modal" style="display:none; position:fixed; inset:0; z-index:1000;
+       background:rgba(0,0,0,0.5); align-items:center; justify-content:center;">
+    <div style="background:#fff; color:#000; padding:1.5rem; border-radius:8px;
+         min-width:320px; box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+      <h3 style="margin:0 0 0.5rem;">⌨️ 掃描 / 輸入 Barcode</h3>
+      <div id="scan-modal-prompt" style="margin-bottom:0.75rem; color:#555;">
+        請掃描或輸入 barcode / SN
+      </div>
+      <input id="scan-modal-input" placeholder="掃描或輸入後按 Enter / 送出…"
+             style="width:100%; padding:0.5rem; box-sizing:border-box; font-size:1rem;"
+             onkeydown="if(event.key==='Enter'){submitScanModal();}">
+      <div style="margin-top:1rem; text-align:right; display:flex; gap:0.5rem; justify-content:flex-end;">
+        <button onclick="closeScanModal()"
+                style="padding:0.4rem 0.8rem; border:none; border-radius:4px; cursor:pointer; background:#ccc; color:#000;">取消</button>
+        <button onclick="submitScanModal()"
+                style="padding:0.4rem 0.8rem; border:none; border-radius:4px; cursor:pointer; background:#FFB74D; color:#000; font-weight:bold;">⌨️ 送出</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reset-button prompt modal: pure informational. Shown when the backend
+       asks the operator to HOLD the DUT reset button; auto-closes when the DUT
+       reports the reset (or the next step starts). No input required. -->
+  <div id="reset-modal" style="display:none; position:fixed; inset:0; z-index:1000;
+       background:rgba(0,0,0,0.55); align-items:center; justify-content:center;">
+    <div style="background:#fff; color:#000; padding:1.5rem 1.75rem; border-radius:8px;
+         min-width:340px; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,0.3);
+         border-top:6px solid #F44336;">
+      <h3 style="margin:0 0 0.75rem;">🔴 請按住 DUT Reset 按鈕</h3>
+      <div id="reset-modal-msg" style="margin-bottom:0.5rem; color:#333; font-size:1.05rem;">
+        請<strong>持續按住</strong> DUT 上的 Reset 按鈕<strong> ≥ 5 秒</strong>，
+        待裝置偵測到後會自動繼續。
+      </div>
+      <div style="color:#888; font-size:0.85rem;">
+        （偵測到 reset 後此視窗會自動關閉；若放太快會提示重按）
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/blocks.js?v=2"></script>
+  <script src="/static/generators.js?v=2"></script>
+
+  <!-- Blockly Toolbox — pure MFG: only Utility (MFG steps) + Console 製造 -->
+  <xml id="toolbox" style="display:none">
+    <category name="🔧 工具 Utility" colour="290">
+      <block type="wait_seconds"><field name="SECONDS">5</field></block>
+      <block type="wait_ssh_ready"><field name="TIMEOUT">120</field></block>
+      <block type="message"></block>
+      <block type="atlas_scan_barcode"><field name="SOURCE">usb_hid</field><field name="TIMEOUT">30</field><field name="EXPECTED_LEN">14</field></block>
+      <block type="pdu_power_cycle"><field name="ACTION">CYCLE</field><field name="DELAY">2</field></block>
+    </category>
+    <category name="🏭 MT7981" colour="200">
+      <block type="atlas_enter_uboot_menu"><field name="TIMEOUT">90</field></block>
+      <block type="atlas_read_hw_version"></block>
+      <block type="atlas_update_flash_image"><field name="TFTP_SERVER">192.168.1.100</field><field name="DUT_IP">192.168.1.10</field><field name="FIP_IMAGE">tip_fip.bin</field><field name="FW_IMAGE">openwrt-mediatek-mt7981-edgecore_eap111-squashfs-factory.bin</field></block>
+      <block type="atlas_write_uboot_env_serial"><field name="SERIAL_NUMBER"></field><field name="BOOTCOUNT">0</field><field name="ACTIVE">1</field><field name="UPGRADE_AVAILABLE">1</field></block>
+      <block type="atlas_write_manufacturing_data"></block>
+      <block type="atlas_enter_tip_kernel"><field name="TIMEOUT">90</field><field name="USERNAME">root</field><field name="PASSWORD"></field></block>
+      <block type="atlas_check_tip_version"><field name="EXPECTED_VERSION">v4.1.1</field></block>
+      <block type="atlas_check_manufacturing_data"><field name="VERIFY_SN">TRUE</field><field name="VERIFY_MAC">TRUE</field><field name="VERIFY_MODEL">TRUE</field></block>
+      <block type="atlas_reboot_and_wait_login"><field name="TIMEOUT">90</field></block>
+      <block type="atlas_reset_default"><field name="TIMEOUT">90</field></block>
+      <block type="atlas_prepare_certification"><field name="CERT_SERVER">prod-cert.accton.com</field></block>
+      <block type="atlas_write_certification"><field name="DUT_IP">192.168.1.20</field></block>
+      <block type="atlas_check_certification"></block>
+    </category>
+    <category name="📶 QCC74x" colour="160">
+      <block type="qcc_connect"></block>
+      <block type="qcc_power_mode_test"></block>
+      <block type="qcc_battery_mode_test"></block>
+      <block type="qcc_fuel_gauge_test"></block>
+      <block type="qcc_check_versions"></block>
+      <block type="qcc_i2c_scan"></block>
+      <block type="qcc_factory_write"></block>
+      <block type="qcc_factory_check"></block>
+      <block type="qcc_led_test"></block>
+      <block type="qcc_reset_button_test"></block>
+      <block type="qcc_wdt_test"></block>
+    </category>
+    <category name="🔌 Console 製造" colour="180">
+      <block type="console_connect"></block>
+      <block type="console_send"><field name="CMD">help</field><field name="TIMEOUT">30</field></block>
+      <block type="console_tftp"><field name="FILE">fip.bin</field><field name="ADDR">0x46000000</field><field name="TIMEOUT">60</field></block>
+      <block type="console_nand_erase"><field name="OFFSET">0x00380000</field><field name="SIZE">0x00200000</field></block>
+      <block type="console_nand_write"><field name="SRC">0x46000000</field><field name="DEST">0x00580000</field><field name="SIZE">${filesize}</field></block>
+      <block type="console_reset"></block>
+      <block type="ssh_cmd"><field name="CMD">cat /etc/openwrt_release</field></block>
+      <block type="verify_version"><field name="EXPECTED">Shasta-AP-NOS Rel 3.4 build 23</field></block>
+    </category>
+  </xml>
+  <script>
+    // Inject Blockly workspace
+    var workspace = Blockly.inject('blocklyDiv', {
+      toolbox: document.getElementById('toolbox'),
+      scrollbars: true,
+      trashcan: true,
+      zoom: { controls: true, wheel: false, startScale: 1.0, maxScale: 3, minScale: 0.3, scaleSpeed: 1.2 },
+      move: { scrollbars: true, drag: true, wheel: true },
+      theme: Blockly.Theme.defineTheme('mfgtest', {
+        base: Blockly.Themes.Classic,
+        componentStyles: {
+          toolboxBackgroundColour: '#e0e0e0',
+          toolboxForegroundColour: '#222',
+          flyoutBackgroundColour: '#cfd8dc',
+          flyoutForegroundColour: '#222',
+          flyoutOpacity: 0.9,
+        }
+      }),
+    });
+
+    // Pure MFG: device type is always 'mfg'; all toolbox blocks use the MFG
+    // (BARE statement) template, so no toolbox filtering is needed.
+    var DEV_TYPE = 'mfg';
+
+    workspace.addChangeListener(function() {
+      try {
+        var code = generateTestFile(workspace);
+        document.getElementById('code-preview').textContent = code;
+      } catch(e) { console.warn('codegen:', e); }
+    });
+
+    // Current station code from the dropdown ("" = 全部/未指定).
+    function currentStation() {
+      var sel = document.getElementById('dev-station');
+      return sel ? (sel.value || '') : '';
+    }
+
+    // Save test to backend (upserts by tc_id = name).
+    async function saveTest() {
+      var name = document.getElementById('test-name').value || 'GUI-001';
+      var state = Blockly.serialization.workspaces.save(workspace);
+      var code = generateTestFile(workspace);
+      var resp = await fetch('/api/tests', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          name: name, tc_id: name, workspace_json: state, python_code: code,
+          station: currentStation(),
+          model: (document.getElementById('dev-model').value || '')
+        })
+      });
+      if (resp.ok) alert('已儲存: ' + name);
+    }
+
+    // Save As: copy the current blocks to a NEW script under a new name +
+    // chosen station (does NOT overwrite the source). Use case: load an FDL
+    // script, tweak blocks, save as a PT script, then keep editing.
+    async function saveTestAs() {
+      var current = document.getElementById('test-name').value || '';
+      var station = currentStation();
+      if (!station) {
+        alert('請先在上方「站別」下拉選擇目標站別（PT / FT / FDL），再另存為。');
+        return;
+      }
+      var suggested = current ? (current + '-' + station) : ('GUI-' + station);
+      var newName = prompt('另存為新測試名稱（站別 ' + station + '）：', suggested);
+      if (!newName) return;
+      newName = newName.trim();
+      if (!newName) return;
+      var state = Blockly.serialization.workspaces.save(workspace);
+      var code = generateTestFile(workspace);
+      var resp = await fetch('/api/tests', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          name: newName, tc_id: newName, workspace_json: state, python_code: code,
+          station: station,
+          model: (document.getElementById('dev-model').value || '')
+        })
+      });
+      if (resp.ok) {
+        document.getElementById('test-name').value = newName;
+        var nf = document.getElementById('test-name');
+        if (nf) delete nf.dataset.scriptPath;
+        await loadScripts();  // refresh list so the new script appears
+        alert('已另存為: ' + newName + '（站別 ' + station + '）');
+      } else {
+        alert('另存失敗');
+      }
+    }
+
+    var _currentRunId = null;
+    var _currentRunWs = null;
+
+    // --- Scan popup modal ---
+    function openScanModal(promptText) {
+      var modal = document.getElementById('scan-modal');
+      var p = document.getElementById('scan-modal-prompt');
+      var inp = document.getElementById('scan-modal-input');
+      if (promptText) p.textContent = promptText;
+      inp.value = '';
+      modal.style.display = 'flex';
+      inp.focus();
+    }
+    function closeScanModal() {
+      document.getElementById('scan-modal').style.display = 'none';
+    }
+    function submitScanModal() {
+      var inp = document.getElementById('scan-modal-input');
+      var data = inp.value;
+      if (_currentRunWs && _currentRunWs.readyState === WebSocket.OPEN) {
+        if (data) _currentRunWs.send(JSON.stringify({type: 'stdin', data: data}));
+      }
+      closeScanModal();
+    }
+
+    // Reset-button informational modal (no input). Opened when the backend
+    // asks the operator to hold reset; auto-closed when the DUT reports reset.
+    function openResetModal(html) {
+      var modal = document.getElementById('reset-modal');
+      var msg = document.getElementById('reset-modal-msg');
+      if (html) msg.innerHTML = html;
+      modal.style.display = 'flex';
+    }
+    function closeResetModal() {
+      document.getElementById('reset-modal').style.display = 'none';
+    }
+
+    // Switch the run button into a red "⏹ 停止" that stops the active run.
+    function setRunButtonRunning(runId) {
+      var btn = document.getElementById('btn-run');
+      btn.disabled = false;
+      btn.textContent = '⏹ 停止';
+      btn.style.background = '#F44336';
+      btn.style.color = '#fff';
+      btn.onclick = stopCurrentRun;
+    }
+    // Restore the run button back to the green "▶️ 執行".
+    function setRunButtonIdle() {
+      var btn = document.getElementById('btn-run');
+      btn.disabled = false;
+      btn.textContent = '▶️ 執行';
+      btn.style.background = '#4CAF50';
+      btn.style.color = '#fff';
+      btn.onclick = runTest;
+    }
+    // Stop the currently running test via the backend, then let ws.onclose
+    // restore the button.
+    async function stopCurrentRun() {
+      if (!_currentRunId) return;
+      var btn = document.getElementById('btn-run');
+      btn.disabled = true;
+      btn.textContent = '⏳ 停止中...';
+      try {
+        await fetch('/api/runs/' + _currentRunId + '/stop', { method: 'POST' });
+      } catch (e) { /* ignore; ws close will reconcile */ }
+    }
+
+    function connectRun(runId) {
+      var output = document.getElementById('run-output');
+      var status = document.getElementById('run-status');
+      status.textContent = '⏳ 執行中...';
+      status.style.color = '#FFC107';
+      setRunButtonRunning(runId);
+
+      var ws = new WebSocket('ws://' + location.host + '/ws/runs/' + runId);
+      _currentRunWs = ws;
+      var _runFinished = false;
+      ws.onmessage = function(e) {
+        output.textContent += e.data + '\n';
+        output.scrollTop = output.scrollHeight;
+        var ended = false;
+        if (e.data.indexOf('[PASSED]') >= 0 || (e.data.indexOf('passed') >= 0 && e.data.indexOf('failed') < 0 && e.data.indexOf('=') >= 0)) {
+          status.textContent = '✅ PASSED'; status.style.color = '#4CAF50'; ended = true;
+        } else if (e.data.indexOf('[FAILED]') >= 0 || e.data.indexOf('FAILED') >= 0) {
+          status.textContent = '❌ FAILED'; status.style.color = '#F44336'; ended = true;
+        } else if (e.data.indexOf('[STOPPED]') >= 0) {
+          status.textContent = '⏹️ 已停止'; status.style.color = '#9E9E9E'; ended = true;
+        }
+        if (ended) { _runFinished = true; closeScanModal(); closeResetModal(); ws.close(); return; }
+        if (!_runFinished) {
+          var m = e.data.match(/Please scan the barcode now\s*(\([^)]*\))?/);
+          if (m) {
+            var hint = m[1] ? ('請掃描或輸入 barcode / SN ' + m[1]) : '請掃描或輸入 barcode / SN';
+            openScanModal(hint);
+          } else if (/Step 1:|EnterUbootMenu|Console connect/.test(e.data)) {
+            closeScanModal();
+          }
+          // Reset-button prompt (informational modal, no input).
+          if (/Please HOLD the reset button/.test(e.data)) {
+            openResetModal('請<strong>持續按住</strong> DUT 上的 Reset 按鈕<strong> ≥ 5 秒</strong>，待裝置偵測到後會自動繼續。');
+          } else if (/released too early|請.*HOLD.*again|HOLD again/i.test(e.data)) {
+            openResetModal('⚠️ 剛才放太快了，請<strong>重新按住</strong> Reset 按鈕<strong> ≥ 5 秒</strong>。');
+          } else if (/Reset to defaults detected|QccWdtTest|Step 11:|factory preserved/.test(e.data)) {
+            closeResetModal();
+          }
+        }
+      };
+      ws.onclose = function() {
+        setRunButtonIdle();
+        localStorage.removeItem('currentRunId');
+        _currentRunId = null;
+        _currentRunWs = null;
+        closeScanModal();
+        closeResetModal();
+        if (status.textContent === '⏳ 執行中...') {
+          status.textContent = '⚠️ 已結束'; status.style.color = '#9E9E9E';
+        }
+      };
+    }
+
+    async function runTest() {
+      var name = document.getElementById('test-name').value || 'GUI-001';
+      if (name === 'GUI-001') {
+        if (!confirm('測試名稱是預設的 "GUI-001"。\n請先從「搜尋現有腳本」選擇測試（例如 EAP111-MFG），或先儲存目前積木。\n\n仍要以 GUI-001 執行嗎？')) {
+          return;
+        }
+      }
+      var output = document.getElementById('run-output');
+      output.textContent = '';
+      document.getElementById('run-status').textContent = '';
+
+      var skuSel = document.getElementById('dev-sku');
+      var skuLabel = document.getElementById('sku-label');
+      var sku = (skuLabel && skuLabel.style.display !== 'none' && skuSel) ? skuSel.value : '';
+
+      var resp = await fetch('/api/runs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({test_id: name, sku: sku})
+      });
+      var data = await resp.json();
+      _currentRunId = data.run_id;
+      localStorage.setItem('currentRunId', data.run_id);
+      connectRun(data.run_id);
+    }
+
+    // Restore running test on page load
+    (function() {
+      var savedRunId = localStorage.getItem('currentRunId');
+      if (savedRunId) {
+        fetch('/api/runs/' + savedRunId).then(function(r) { return r.json(); }).then(function(run) {
+          var output = document.getElementById('run-output');
+          var status = document.getElementById('run-status');
+          if (run.status === 'running') {
+            if (run.log) output.textContent = run.log + '\n';
+            _currentRunId = savedRunId;
+            connectRun(savedRunId);
+          } else {
+            output.textContent = run.log || '';
+            status.textContent = run.status === 'passed' ? '✅ PASSED' : '❌ FAILED';
+            status.style.color = run.status === 'passed' ? '#4CAF50' : '#F44336';
+            localStorage.removeItem('currentRunId');
+          }
+        }).catch(function() { localStorage.removeItem('currentRunId'); });
+      }
+    })();
+
+    // --- Device Profile (MFG models only) ---
+    var profiles = {};
+    async function loadProfiles() {
+      var resp = await fetch('/api/profiles');
+      var list = await resp.json();
+      list.forEach(function(p) { profiles[p.name] = p; });
+      populateModels();
+    }
+    function populateModels() {
+      var sel = document.getElementById('dev-model');
+      sel.innerHTML = '';
+      // MFG models are profiles of type 'ap' (EAP111/OAP101/Pi7a).
+      Object.values(profiles).forEach(function(p) {
+        var opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        sel.appendChild(opt);
+      });
+      onModelChange();
+    }
+
+    function onModelChange() {
+      updateSkuDropdown();
+      if (typeof updateScriptList === 'function') updateScriptList();
+    }
+
+    // --- SKU dropdown (populated from /api/skus per model) ---
+    var _skus = {};
+    async function loadSkus() {
+      try {
+        var resp = await fetch('/api/skus');
+        _skus = await resp.json();
+      } catch (e) { _skus = {}; }
+      updateSkuDropdown();
+    }
+    function updateSkuDropdown() {
+      var model = document.getElementById('dev-model').value;
+      var label = document.getElementById('sku-label');
+      var sel = document.getElementById('dev-sku');
+      var info = _skus[model] || null;
+      if (!info || !info.skus || !info.skus.length) {
+        label.style.display = 'none'; sel.innerHTML = ''; return;
+      }
+      sel.innerHTML = '';
+      info.skus.forEach(function(s) {
+        var opt = document.createElement('option');
+        opt.value = s; opt.textContent = s;
+        if (s === info.default) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      label.style.display = '';
+    }
+    loadSkus();
+    loadProfiles();
+
+    // --- Existing Scripts ---
+    var _scripts = [];
+    async function loadScripts() {
+      var resp = await fetch('/api/scripts');
+      _scripts = await resp.json();
+      updateScriptList();
+    }
+    function updateScriptList() {
+      var list = document.getElementById('script-list');
+      list.innerHTML = '';
+      var model = document.getElementById('dev-model').value || '';
+      var stationSel = document.getElementById('dev-station');
+      var station = stationSel ? (stationSel.value || '') : '';
+      _scripts.forEach(function(s) {
+        // Pure MFG: all scripts are type 'mfg'; filter by model AND station if set.
+        if (model && s.model && s.model !== model) return;
+        if (station && s.station && s.station !== station) return;
+        // If a station filter is set, hide scripts with no declared station.
+        if (station && !s.station) return;
+        var opt = document.createElement('option');
+        opt.value = s.name;
+        opt.setAttribute('data-path', s.path);
+        list.appendChild(opt);
+      });
+    }
+
+    // --- Station dropdown (populated from /api/stations; open & extensible) ---
+    async function loadStations() {
+      try {
+        var resp = await fetch('/api/stations');
+        var list = await resp.json();
+        var sel = document.getElementById('dev-station');
+        // Keep the leading "全部" option, then append station codes.
+        sel.innerHTML = '<option value="">全部</option>';
+        list.forEach(function(st) {
+          var opt = document.createElement('option');
+          opt.value = st.code;
+          opt.textContent = st.name || st.code;
+          sel.appendChild(opt);
+        });
+      } catch (e) { /* stations optional */ }
+    }
+    function onStationChange() {
+      if (typeof updateScriptList === 'function') updateScriptList();
+    }
+    loadStations();
+
+    async function restoreFromDB(name) {
+      try {
+        var resp = await fetch('/api/tests/' + encodeURIComponent(name));
+        if (resp.ok) {
+          var data = await resp.json();
+          if (data.workspace_json && Object.keys(data.workspace_json).length > 0) {
+            workspace.clear();
+            document.getElementById('code-preview').textContent = data.python_code || '';
+            Blockly.serialization.workspaces.load(data.workspace_json, workspace);
+            document.getElementById('atlas-notice').style.display = 'none';
+            return true;
+          }
+        }
+      } catch(e) { /* not in DB */ }
+      return false;
+    }
+
+    async function onScriptSelect() {
+      var val = document.getElementById('script-filter').value;
+      if (!val) return;
+      var restored = await restoreFromDB(val);
+      if (restored) {
+        var nameField = document.getElementById('test-name');
+        nameField.value = val;
+        delete nameField.dataset.scriptPath;
+        return;
+      }
+      var match = _scripts.find(function(s) { return s.name === val; });
+      if (!match) return;
+      var nameField = document.getElementById('test-name');
+      nameField.value = val;
+      nameField.dataset.scriptPath = match.path;
+      fetch('/api/scripts/parse?path=' + encodeURIComponent(match.path))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.type === 'atlas') {
+            workspace.clear();
+            document.getElementById('code-preview').textContent = data.source;
+            document.getElementById('atlas-notice').style.display = '';
+          } else {
+            workspace.clear();
+            document.getElementById('atlas-notice').style.display = 'none';
+            var xml = Blockly.utils.xml.textToDom(data.xml);
+            Blockly.Xml.domToWorkspace(xml, workspace);
+          }
+        })
+        .catch(function(e) { console.error('load error:', e); });
+    }
+
+    function onScriptInput() {
+      var val = document.getElementById('script-filter').value;
+      var match = _scripts.find(function(s) { return s.name === val; });
+      if (match) onScriptSelect();
+    }
+
+    loadScripts();
+  </script>
+</body>
+</html>

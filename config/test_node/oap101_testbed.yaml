@@ -1,0 +1,77 @@
+ap:
+  model: OAP101
+  console:
+    # ser2net exposes the DUT serial as telnet (shared by scripts + GUI).
+    type: telnet            # serial or telnet (ser2net)
+    port: 127.0.0.1:5001    # host:port for ser2net; use /dev/ttyUSB0 for direct serial
+    baudrate: 115200        # informational only in telnet mode
+    prompt: "MT7981>"       # TODO: confirm OAP101 U-Boot prompt (differs if not MT7981 SoC)
+    cmd_delay: 0
+    # Direct-serial fallback:
+    #   type: serial
+    #   port: /dev/ttyUSB0
+  ssh:
+    ip: 192.168.1.1
+    user: root
+    password: ""
+  tftp:
+    server_ip: 192.168.1.2
+    device_ip: 192.168.1.1
+    port: 69
+    directory: "/home/alex_chiang/projects/kiro-ATLAS/tftp"
+  power:
+    url: "ftdi://ftdi:232h/1"
+    relay: 1
+    active_high: false
+    off_delay: 2.0
+
+  # Model-specific manufacturing parameters for OAP101.
+  # TODO: confirm all values against OAP101 hardware. The defaults below are
+  # copied from EAP111 (MT7981); change the ones that differ:
+  #   - uboot_prompt if OAP101 uses a different SoC/prompt
+  #   - factory_read_cmd + *_offset if the factory MTD layout differs
+  #   - flash_load_addr / *_write_offset / *_erase_size if flash layout differs
+  #   - sku / model / reference_design / model_description for OAP101
+  mfg:
+    uboot_prompt: "MT7981>"
+    factory_read_cmd: "mtd read factory 0x46000000 0x0 0x800"
+    mac_eth0_offset: "0x4600002A"
+    mac_eth1_offset: "0x46000024"
+    mac_ar0_offset: "0x46000004"
+    sn_offset: "0x46000060"
+    model_offset: "0x46000070"
+    hw_rev_offset: "0x46000080"
+    flash_load_addr: "0x46000000"
+    fip_write_offset: "0x00380000"
+    fip_erase_size: "0x00200000"
+    fw_write_offset_1: "0x00580000"
+    fw_write_offset_2: "0x04580000"
+    fw_erase_size: "0x08000000"
+    sku: "OAP101(TE)"           # TODO: confirm OAP101 SKU string
+    model: "OAP101"
+    reference_design: "mt7981-spim-nand-rfb"   # TODO: confirm
+    manufacturer_name: "EC"
+    manufacturer_url: "www.edge-core.com"
+    model_description: "OAP101 Outdoor Access Point"   # TODO: confirm
+    certification_region: "WW"
+
+pc:
+  label: "Test PC (4-port)"
+  ip: 192.168.1.2
+  user: root
+  password: ""
+  ports:
+    eth1:
+      ip: 192.168.1.2
+      connect_to: "ap1:eth0"
+    eth2:
+      ip: 192.168.2.2
+      connect_to: "ap1:eth1"
+    eth3:
+      ip: ""
+      connect_to: ""
+    eth4:
+      ip: ""
+      connect_to: ""
+  iperf:
+    server_port: 5201

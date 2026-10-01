@@ -1,0 +1,68 @@
+%YAML 1.1
+---
+# ser2net 4.x configuration for kiro-ATLAS console server
+#
+# Purpose
+# -------
+# Expose the DUT serial console (/dev/ttyUSB0) as a TCP/telnet endpoint so that
+# BOTH the pytest test scripts AND the WLAN Test GUI can attach to the same
+# physical console without fighting over the exclusive serial device.
+#
+#   physical serial ── ser2net (single owner) ──┬── test scripts (telnet 5001)
+#   /dev/ttyUSB0                                 ├── GUI live monitor (telnet 5001)
+#                                                └── trace-read -> log file
+#
+# Install (Ubuntu 24.04, ser2net 4.6.5)
+# -------------------------------------
+#   sudo apt-get install -y ser2net
+#   sudo install -d /var/log/ser2net
+#   sudo cp config/console/ser2net.yaml /etc/ser2net/ser2net.yaml
+#   sudo systemctl restart ser2net
+#
+# Note on multiple connections
+# ----------------------------
+# With `max-connections: 2`, ser2net sends device output to ALL connected
+# clients simultaneously, and input from ANY client is written to the device.
+# ser2net has no per-client read-only mode, so the GUI monitor MUST refrain
+# from sending keystrokes (see docs/console_server.md).
+
+connection: &ttyUSB0
+  # TCP endpoint clients connect to. `telnet(rfc2217)` negotiates a telnet
+  # session compatible with the `telnet host port` command used by
+  # src/wlan/console.py (Console.connect, type: telnet).
+  accepter: telnet(rfc2217),tcp,5001
+
+  # Serial device: 115200 8N1. `local` ignores modem control lines so the
+  # session stays up even without hardware DTR/DSR wiring.
+  # Uses the stable udev symlink /dev/mfg-console (PL2303 067b:2303) instead of
+  # /dev/ttyUSB0 to avoid USB enumeration-order numbering drift.
+  # See config/console/99-mfg-serial.rules.
+  connector: serialdev,/dev/mfg-console,115200n81,local
+
+  options:
+    # A new connection may take over from a stale/hung one instead of being
+    # refused. Prevents "port already in use" lockups after a crashed test.
+    kickolduser: true
+
+    # Allow up to 4 simultaneous clients. Each GUI instance's live-Console
+    # monitor holds ONE persistent connection to 5001; running multiple GUIs
+    # (or GUI + a manual telnet) plus the test session can exhaust the slots,
+    # which makes the test's console connection get dropped ("Connection closed
+    # by foreign host"). 4 leaves headroom for 2-3 GUIs + the active test.
+    max-connections: 4
+
+    # Persistently record everything read FROM the device (i.e. all console
+    # output) to a fixed log file. A fixed name is used deliberately: ser2net's
+    # date escapes (\m/\D) are NOT zero-padded, which produced broken names
+    # like "ttyUSB0-202691.log". Use logrotate for rotation instead.
+    trace-read: /var/log/ser2net/ttyUSB0.log
+
+# --- Multi-DUT baud rate: handled via RFC2217, NOT a second port ------------
+# Different DUTs use different console baud rates (EAP111=115200, Pi7a/CH340=
+# 2000000). ser2net CANNOT open the same physical device on two ports at once
+# ("Object was already in use"). Instead we use ONE port (5001) with the
+# `telnet(rfc2217)` accepter above: the client (src/mfg/console.py, via
+# pyserial rfc2217://) negotiates the baudrate at connect time from the
+# testbed's ap.console.baudrate. So EAP111 (115200) and Pi7a (2000000) both use
+# 5001; the rate is set per-connection. The initial 115200n81 in the connector
+# is just the default before the client negotiates.
