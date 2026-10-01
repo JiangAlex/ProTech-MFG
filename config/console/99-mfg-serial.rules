@@ -35,27 +35,20 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", SYMLINK+="m
 # --- DUT console: QinHeng CH340 (e.g. Pi7a / QCC748) -> /dev/mfg-console ---
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="mfg-console"
 
-# --- DUT console: FTDI FT4232H (Quad RS232-HS, 0403:6011) -> /dev/mfg-console ---
-# The FT4232H exposes FOUR UART channels (ttyUSB0..3). We bind by physical USB
-# port path (KERNELS) rather than VID:PID, because:
-#   (a) all four channels share VID:PID 0403:6011, so VID:PID alone can't
-#       distinguish them, and
-#   (b) KERNELS matches the device path directly and does NOT depend on ENV
-#       vars (ID_USB_INTERFACE_NUM) that other rules populate later, nor on
-#       ATTRS layer-chasing — this proved to be the only reliable match on the
-#       Pi5 bench.
-# Port path mapping (from `udevadm info -q property`): usb-0:2:1.<n> -> 1-2:1.<n>
-#   1-2:1.0 = channel A -> ttyUSB0 (DUT console, default /dev/mfg-console)
-#   1-2:1.1 = channel B, 1-2:1.2 = channel C, 1-2:1.3 = channel D
-# NOTE: this binds to a specific USB port (1-2). If the FT4232H is moved to a
-# different physical port, update these KERNELS values (find via
-# `udevadm info -q path -n /dev/ttyUSB0`).
-# IMPORTANT: after editing, `udevadm control --reload-rules` + `udevadm trigger`
-# does NOT re-apply SYMLINK+= to already-present devices. You must generate a
-# real 'add' uevent — re-plug the USB cable, or:
-#   echo 1-2 | sudo tee /sys/bus/usb/drivers/usb/unbind
-#   echo 1-2 | sudo tee /sys/bus/usb/drivers/usb/bind
-SUBSYSTEM=="tty", KERNELS=="1-2:1.0", SYMLINK+="mfg-console-a", SYMLINK+="mfg-console"
+# --- Secondary UARTs: FTDI FT4232H (Quad RS232-HS, 0403:6011) ---
+# NOTE: the FT4232H is NOT the DUT console on this bench. EAP111's console is a
+# PL2303 (067b:2303, see above) and OWNS /dev/mfg-console. The FT4232H's four
+# channels are only given stable aux names mfg-console-a/b/c/d so they are
+# addressable if needed; they MUST NOT claim /dev/mfg-console (doing so caused
+# the symlink to flip between PL2303 and the FT4232H depending on enumeration
+# order, and we spent a long session chasing garbage reads off the wrong chip).
+#
+# We bind by physical USB port path (KERNELS) rather than VID:PID because all
+# four channels share 0403:6011. Port path (from `udevadm info -q path`):
+# 1-2:1.0..3 = channel A..D. If the FT4232H moves to another port, update these.
+# IMPORTANT: reload-rules + trigger does NOT re-apply SYMLINK to already-present
+# devices; re-plug the cable or unbind/bind the USB device to force a real add.
+SUBSYSTEM=="tty", KERNELS=="1-2:1.0", SYMLINK+="mfg-console-a"
 SUBSYSTEM=="tty", KERNELS=="1-2:1.1", SYMLINK+="mfg-console-b"
 SUBSYSTEM=="tty", KERNELS=="1-2:1.2", SYMLINK+="mfg-console-c"
 SUBSYSTEM=="tty", KERNELS=="1-2:1.3", SYMLINK+="mfg-console-d"
