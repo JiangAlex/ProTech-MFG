@@ -35,6 +35,17 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", SYMLINK+="m
 # --- DUT console: QinHeng CH340 (e.g. Pi7a / QCC748) -> /dev/mfg-console ---
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="mfg-console"
 
+# --- DUT console: FTDI FT4232H (Quad RS232-HS, 0403:6011) -> /dev/mfg-console ---
+# The FT4232H exposes FOUR UART channels (interface 00/01/02/03 -> ttyUSB0..3),
+# so we MUST pin the console to a single channel via bInterfaceNumber, otherwise
+# all four would claim the same symlink. DUT console is wired to channel A
+# (interface 00) on this bench. Each channel also gets a stable mfg-console-<a-d>
+# name so the other UARTs remain addressable.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6011", ATTRS{bInterfaceNumber}=="00", SYMLINK+="mfg-console-a", SYMLINK+="mfg-console"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6011", ATTRS{bInterfaceNumber}=="01", SYMLINK+="mfg-console-b"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6011", ATTRS{bInterfaceNumber}=="02", SYMLINK+="mfg-console-c"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6011", ATTRS{bInterfaceNumber}=="03", SYMLINK+="mfg-console-d"
+
 # --- Power relay: FTDI FT232H -> /dev/mfg-power ---
 # The FT232H exposes an FTDI interface; when unbound from ftdi_sio (see
 # tools/setup_ft232h_gpio.sh) pyftdi accesses it directly by VID:PID
