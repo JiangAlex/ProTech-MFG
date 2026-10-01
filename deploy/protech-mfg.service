@@ -1,0 +1,25 @@
+# systemd unit for the ProTech-MFG fixture GUI (installed by deploy/install.sh).
+# Placeholders @PROJECT_ROOT@ / @RUN_USER@ / @PORT@ are substituted at install
+# time. Do NOT edit the installed copy directly; re-run install.sh instead.
+[Unit]
+Description=ProTech-MFG fixture GUI (manufacturing test, port @PORT@)
+# Network must be up for the GUI to bind 0.0.0.0 and for TFTP/SSH to the DUT.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@RUN_USER@
+WorkingDirectory=@PROJECT_ROOT@
+# Fixture identity = eth0 MAC (resolved by src/web/host.py). MFG_HOST left unset
+# so get_host() reads the real eth0 MAC; set MFG_HOST here only to override.
+# Environment=MFG_HOST=
+# Environment=MFG_HOST_IFACE=eth0
+ExecStart=@PROJECT_ROOT@/.venv/bin/python @PROJECT_ROOT@/run_gui.py @PORT@
+Restart=on-failure
+RestartSec=3
+# Give the TFTP/console threads time to shut down cleanly on stop/restart.
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target
