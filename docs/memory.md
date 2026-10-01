@@ -67,6 +67,23 @@
   `NOTICE: BL2 ... CPU: MT7981 (1300MHz) ... DRAM 512MB ... SPI_NAND ID 0xc2`（EAP111 開機）。
 - 全鏈路確認正常：掃碼 / FT232H relay 送電（「喀」聲）/ PL2303 console / 115200。
 
+### 讀取穩定性：第一次「暴量亂碼」非硬體故障（2026-10-01 補充）
+連跑同一讀取腳本 3 次，結果：
+- 第 1 次：*1,839,484 bytes*、printable 6%（暴量亂碼洪流）。
+- 第 2 次：3,544 bytes、*99%*，讀到 `Hit any key to stop autoboot`。
+- 第 3 次：3,330 bytes、*99%*，`Hit any key` + MT7981 開機 log。
+
+結論：*接線/PL2303 線材沒問題*（2/3 次完美）。第 1 次的 184 萬 bytes 不是接觸不良
+（那會是少資料），而是*上一輪 DUT 殘留狀態 + PL2303 input buffer 積壓*被一次吸入的洪流。
+18:00 單跑一次得 0%，就是撞上這種殘留狀態。
+
+程式層對應點：`src/mfg/console.py` `connect()` 在 telnet(rfc2217) 模式*沒有*在連線後
+清 input buffer（有 `drain()`/`flush()` 方法但 connect 未呼叫）。*建議*：connect 後先
+`reset_input_buffer()`/`drain()` 丟棄殘留，再開始比對。
+
+量產注意：正式 `manufacturing_script.py` Step 1 enter_uboot_menu 用*文字錨點*
+（偵測 U-Boot menu 後每秒送 `0`），比裸讀固定秒數穩健；驗收應跑正式測試而非裸讀腳本。
+
 ### 待補進專案（下次 push）
 - `deploy/install.sh`：部署 ser2net 設定到正確路徑 + 建 `/var/log/ser2net`（group adm, 640）。
 - `ser2net.yaml` 註解更正安裝路徑（Raspberry Pi OS vs Ubuntu）。
