@@ -36,15 +36,29 @@ SUBSYSTEM=="tty", ATTRS{idVendor}=="067b", ATTRS{idProduct}=="2303", SYMLINK+="m
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="mfg-console"
 
 # --- DUT console: FTDI FT4232H (Quad RS232-HS, 0403:6011) -> /dev/mfg-console ---
-# The FT4232H exposes FOUR UART channels (interface 00/01/02/03 -> ttyUSB0..3),
-# so we MUST pin the console to a single channel via bInterfaceNumber, otherwise
-# all four would claim the same symlink. DUT console is wired to channel A
-# (interface 00) on this bench. Each channel also gets a stable mfg-console-<a-d>
-# name so the other UARTs remain addressable.
-SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6011", ATTRS{bInterfaceNumber}=="00", SYMLINK+="mfg-console-a", SYMLINK+="mfg-console"
-SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6011", ATTRS{bInterfaceNumber}=="01", SYMLINK+="mfg-console-b"
-SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6011", ATTRS{bInterfaceNumber}=="02", SYMLINK+="mfg-console-c"
-SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6011", ATTRS{bInterfaceNumber}=="03", SYMLINK+="mfg-console-d"
+# The FT4232H exposes FOUR UART channels (ttyUSB0..3). We bind by physical USB
+# port path (KERNELS) rather than VID:PID, because:
+#   (a) all four channels share VID:PID 0403:6011, so VID:PID alone can't
+#       distinguish them, and
+#   (b) KERNELS matches the device path directly and does NOT depend on ENV
+#       vars (ID_USB_INTERFACE_NUM) that other rules populate later, nor on
+#       ATTRS layer-chasing — this proved to be the only reliable match on the
+#       Pi5 bench.
+# Port path mapping (from `udevadm info -q property`): usb-0:2:1.<n> -> 1-2:1.<n>
+#   1-2:1.0 = channel A -> ttyUSB0 (DUT console, default /dev/mfg-console)
+#   1-2:1.1 = channel B, 1-2:1.2 = channel C, 1-2:1.3 = channel D
+# NOTE: this binds to a specific USB port (1-2). If the FT4232H is moved to a
+# different physical port, update these KERNELS values (find via
+# `udevadm info -q path -n /dev/ttyUSB0`).
+# IMPORTANT: after editing, `udevadm control --reload-rules` + `udevadm trigger`
+# does NOT re-apply SYMLINK+= to already-present devices. You must generate a
+# real 'add' uevent — re-plug the USB cable, or:
+#   echo 1-2 | sudo tee /sys/bus/usb/drivers/usb/unbind
+#   echo 1-2 | sudo tee /sys/bus/usb/drivers/usb/bind
+SUBSYSTEM=="tty", KERNELS=="1-2:1.0", SYMLINK+="mfg-console-a", SYMLINK+="mfg-console"
+SUBSYSTEM=="tty", KERNELS=="1-2:1.1", SYMLINK+="mfg-console-b"
+SUBSYSTEM=="tty", KERNELS=="1-2:1.2", SYMLINK+="mfg-console-c"
+SUBSYSTEM=="tty", KERNELS=="1-2:1.3", SYMLINK+="mfg-console-d"
 
 # --- Power relay: FTDI FT232H -> /dev/mfg-power ---
 # The FT232H exposes an FTDI interface; when unbound from ftdi_sio (see
