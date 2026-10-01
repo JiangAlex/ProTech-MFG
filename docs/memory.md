@@ -21,14 +21,24 @@
     `db.py` runs 表加 `host` 欄位（含向後相容 ALTER）；runner 每筆 run 記錄 host；
     app.py 加 `GET /api/host`、runs/html 加「主機」欄；index.html header 顯示主機 badge。
   - 測試：`src/web/tests/test_host.py` 7 passed（解析序/normalize/db 記錄/向後相容欄位）。
-- ⏳ **Task 2 起未開始**：單台 Pi4 部署（deploy/install.sh + protech-mfg.service）→
-  Task 3~6 OTA 中控（PC OTA server + ota-update.sh + 儀表板）→ Task 7 文件。
+- ✅ **Task 2（單台 Pi4 部署）完成並實機驗證**（2026-10-01）：
+  - `deploy/install.sh`（五步 idempotent：apt 套件 / venv+pip / udev 規則 /
+    VERSION / systemd service）、`deploy/protech-mfg.service`、`deploy/README.md` 完成。
+  - **實機部署成功**：Pi4 `192.168.131.166`，install.sh 五步全過，
+    `protech-mfg.service` enabled + started，GUI 在 `:8020`。
+  - **連通性實測**：從開發機 `curl http://192.168.131.166:8020` 回 **HTTP 200**（~32ms），
+    ping 0% loss。後端 + GUI 確認正常對外服務。
+  - 專案已 push 到 GitHub：`https://github.com/JiangAlex/ProTech-MFG`（分支 main）。
+  - 待 Pi4 本機確認（硬體相關、無法遠端驗）：plugdev 群組生效、`/dev/mfg-power`
+    與 `/dev/mfg-console` 符號連結、GUI header 主機 badge 顯示 eth0 MAC。
+- ⏳ **Task 3 起未開始**：Task 3~6 OTA 中控（PC OTA server + ota-update.sh + 儀表板）
+  → Task 7 文件。
 
-## 下一步（Task 2）
-- `deploy/install.sh`（建 venv、pip install、跑 tools/setup_ft232h_gpio.sh、產生 VERSION）。
-- `deploy/protech-mfg.service`（ExecStart=python run_gui.py 8020、Environment 可注入
-  MFG_HOST/MFG_HOST_IFACE、開機自啟、失敗重啟）。
-- 不依賴 OTA 的最小可 demo：Pi4 一鍵裝 + systemd 自啟 + 瀏覽器連得上 + header 顯示該台 MAC。
+## 下一步（Task 3：OTA 中控）
+- PC 端 OTA server（集中管理多台 Pi4、派送版本）。
+- Pi4 端 `ota-update.sh`（比對 VERSION、拉新版、重啟 service）。
+- OTA 儀表板（各台 Pi4 版本 / 線上狀態）。
+- 多台 Pi4：各台重複 `deploy/install.sh` 即可，治具識別自動取各台 eth0 MAC。
 
 ## 驗證指令備忘
 ```bash
