@@ -21,6 +21,7 @@
       <label>型號: <select id="dev-model" onchange="onModelChange()"></select></label>
       <label id="sku-label" style="display:none;">SKU: <select id="dev-sku"></select></label>
       <label>站別: <select id="dev-station" onchange="onStationChange()"><option value="">全部</option></select></label>
+      <span id="host-badge" title="治具主機 eth0 MAC" style="font-size:0.75rem; color:#888; padding:0.2rem 0.5rem; border:1px solid #444; border-radius:4px;">主機: …</span>
     </div>
   </header>
 
@@ -500,6 +501,18 @@
       if (typeof updateScriptList === 'function') updateScriptList();
     }
     loadStations();
+
+    // Show this fixture's host identity (eth0 MAC) in the header.
+    async function loadHost() {
+      try {
+        var resp = await fetch('/api/host');
+        if (!resp.ok) return;
+        var data = await resp.json();
+        var el = document.getElementById('host-badge');
+        if (el) el.textContent = '主機: ' + (data.host || '未知');
+      } catch (e) { /* non-fatal: header badge is informational only */ }
+    }
+    loadHost();
 
     async function restoreFromDB(name) {
       try {

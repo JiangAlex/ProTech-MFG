@@ -154,7 +154,11 @@ async def start_run(test_id: str, sku: str = "") -> str:
     py_file = _resolve_script(test_id)
     station = _parse_station(py_file) if py_file.exists() else ""
 
-    db.create_run(run_id, test_id, test_name, station=station)
+    # Record which fixture (Pi4) produced this run, identified by eth0 MAC.
+    from host import get_host
+    host = get_host()
+
+    db.create_run(run_id, test_id, test_name, station=station, host=host)
     _run_names[run_id] = test_name
 
     if not py_file.exists():

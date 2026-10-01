@@ -38,12 +38,15 @@ def init_db():
             status TEXT DEFAULT 'pending',
             duration_sec REAL,
             log TEXT DEFAULT '',
-            station TEXT DEFAULT ''
+            station TEXT DEFAULT '',
+            host TEXT DEFAULT ''
         )""")
-        # Backward-compat: add `station` column to pre-existing runs tables.
+        # Backward-compat: add newer columns to pre-existing runs tables.
         cols = [r[1] for r in c.execute("PRAGMA table_info(runs)").fetchall()]
         if "station" not in cols:
             c.execute("ALTER TABLE runs ADD COLUMN station TEXT DEFAULT ''")
+        if "host" not in cols:
+            c.execute("ALTER TABLE runs ADD COLUMN host TEXT DEFAULT ''")
         c.execute("""CREATE TABLE IF NOT EXISTS schedules (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             test_id TEXT NOT NULL,
@@ -98,11 +101,11 @@ def delete_test(test_id):
 
 # --- Runs CRUD ---
 
-def create_run(run_id, test_id, test_name, station=""):
+def create_run(run_id, test_id, test_name, station="", host=""):
     with _conn() as c:
         c.execute(
-            "INSERT INTO runs (run_id, test_id, test_name, started_at, status, station) VALUES (?,?,?,?,?,?)",
-            (run_id, test_id, test_name, datetime.now().isoformat(), "running", station or "")
+            "INSERT INTO runs (run_id, test_id, test_name, started_at, status, station, host) VALUES (?,?,?,?,?,?,?)",
+            (run_id, test_id, test_name, datetime.now().isoformat(), "running", station or "", host or "")
         )
 
 
@@ -121,7 +124,7 @@ def finish_run(run_id, status, log_text):
 
 def list_runs(limit=50):
     with _conn() as c:
-        return [dict(r) for r in c.execute("SELECT id, run_id, test_id, test_name, started_at, finished_at, status, duration_sec, station FROM runs ORDER BY id DESC LIMIT ?", (limit,))]
+        return [dict(r) for r in c.execute("SELECT id, run_id, test_id, test_name, started_at, finished_at, status, duration_sec, station, host FROM runs ORDER BY id DESC LIMIT ?", (limit,))]
 
 
 def get_run(run_id):

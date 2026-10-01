@@ -164,6 +164,17 @@ async def parse_script(path: str):
 
 # --- Runs ---
 
+@app.get("/api/host")
+async def get_host_info():
+    """Return this fixture's host identity (eth0 MAC) for the GUI header.
+
+    Empty string means undeterminable (e.g. running on a dev PC without eth0);
+    the GUI should fall back to showing a placeholder.
+    """
+    from host import get_host
+    return {"host": get_host()}
+
+
 @app.post("/api/runs")
 async def create_run(req: RunCreate):
     from runner import start_run
@@ -183,16 +194,17 @@ async def runs_html():
     if not runs:
         return HTMLResponse("<p>尚無執行紀錄</p>")
     html = '<table style="width:100%;border-collapse:collapse;">'
-    html += '<tr><th>時間</th><th>測試</th><th>站別</th><th>結果</th><th>耗時</th><th>Log</th></tr>'
+    html += '<tr><th>時間</th><th>測試</th><th>站別</th><th>主機</th><th>結果</th><th>耗時</th><th>Log</th></tr>'
     for r in runs:
         icon = "✅" if r["status"] == "passed" else ("❌" if r["status"] == "failed" else ("🛑" if r["status"] == "stopped" else "⏳"))
         dur = f'{r["duration_sec"]:.0f}s' if r.get("duration_sec") else "-"
         started = r.get("started_at", "")[:16]
         station = r.get("station") or "-"
+        host = r.get("host") or "-"
         stop_btn = f'<button onclick="stopRun(\'{r["run_id"]}\')" style="color:#F44336;cursor:pointer;">⏹ 停止</button>' if r["status"] == "running" else ""
-        html += f'<tr><td>{started}</td><td>{r["test_name"]}</td><td>{station}</td><td>{icon} {r["status"]}</td><td>{dur}</td>'
+        html += f'<tr><td>{started}</td><td>{r["test_name"]}</td><td>{station}</td><td>{host}</td><td>{icon} {r["status"]}</td><td>{dur}</td>'
         html += f'<td><button onclick="toggleLog(\'{r["run_id"]}\')">📋</button> {stop_btn}</td></tr>'
-        html += f'<tr id="log-{r["run_id"]}" style="display:none;"><td colspan="6"><pre style="max-height:200px;overflow:auto;background:#000;padding:0.5rem;font-size:0.7rem;"></pre></td></tr>'
+        html += f'<tr id="log-{r["run_id"]}" style="display:none;"><td colspan="7"><pre style="max-height:200px;overflow:auto;background:#000;padding:0.5rem;font-size:0.7rem;"></pre></td></tr>'
     html += '</table>'
     return HTMLResponse(html)
 
