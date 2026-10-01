@@ -77,9 +77,10 @@
 （那會是少資料），而是*上一輪 DUT 殘留狀態 + PL2303 input buffer 積壓*被一次吸入的洪流。
 18:00 單跑一次得 0%，就是撞上這種殘留狀態。
 
-程式層對應點：`src/mfg/console.py` `connect()` 在 telnet(rfc2217) 模式*沒有*在連線後
-清 input buffer（有 `drain()`/`flush()` 方法但 connect 未呼叫）。*建議*：connect 後先
-`reset_input_buffer()`/`drain()` 丟棄殘留，再開始比對。
+程式層對應點：`src/mfg/console.py` `connect()` 原本*有*呼叫 `drain()`，但 `drain()`
+用「連續 quiet 秒無資料才停」的迴圈、*無總時間上限* → DUT 若持續噴資料就等不到安靜，
+一路吸入形成洪流。*已修*（commit 見下）：telnet 連線後先 `reset_input_buffer()` 硬清
+驅動緩衝；`drain()` 加 `max_total=10s` 總上限。
 
 量產注意：正式 `manufacturing_script.py` Step 1 enter_uboot_menu 用*文字錨點*
 （偵測 U-Boot menu 後每秒送 `0`），比裸讀固定秒數穩健；驗收應跑正式測試而非裸讀腳本。

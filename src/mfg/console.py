@@ -141,6 +141,16 @@ class Console:
             self._serial = serial.serial_for_url(
                 url, baudrate=int(self.baudrate), timeout=0.1
             )
+            # Hard-flush the driver input buffer before wrapping. A previous
+            # session (or a DUT that was left powered and chatty) can leave a
+            # large backlog in the OS/pyserial buffer; reset_input_buffer()
+            # discards it at the driver level, which is more thorough than the
+            # expect()-based drain() below and prevents a huge stale flood from
+            # being slurped into the first expect(). Non-fatal if unsupported.
+            try:
+                self._serial.reset_input_buffer()
+            except Exception:
+                pass
             self._child = _SerialExpect(self._serial,
                                         logfile_read=LogWriter(log), timeout=30)
         else:
@@ -161,16 +171,24 @@ class Console:
         self._child.sendline("")
         return self
 
-    def drain(self, quiet=0.5):
+    def drain(self, quiet=0.5, max_total=10.0):
         """Read and discard any pending output until the line goes quiet.
 
         Used to clear stale buffer content (old prompts, partial commands)
         before starting a fresh interaction. Non-fatal on error.
+
+        Stops when either (a) the line stays quiet for `quiet` seconds, or
+        (b) a hard cap of `max_total` seconds elapses. The cap prevents an
+        unbounded read when the DUT emits a continuous stream (e.g. left
+        powered in a chatty state), which previously could slurp a huge
+        backlog into drain() and stall the session.
         """
         if not self._child:
             return
+        import time
+        deadline = time.monotonic() + max_total
         try:
-            while True:
+            while time.monotonic() < deadline:
                 self._child.expect(r'.+', timeout=quiet)
         except Exception:
             # TIMEOUT/EOF => nothing more to read; buffer is drained.
