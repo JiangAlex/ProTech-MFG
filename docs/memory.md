@@ -99,12 +99,14 @@
   *md.b 的位址行*（如 `4600002a:`，只在真實輸出出現），而非等 prompt。
   `_read_eth_mac`、`_read_sn_model` 皆改。
 - *實機驗證通過*：live EAP111 讀到 eth0/eth1/ar0 = `5C:17:83:ED:EA:38/39/3A`（連續值正確）。
+- *Redmine*：#76（protech-mfg，臭蟲，已解決）`http://blog.softsnail.com:2024/issues/76`。
 
 ### 關聯 Redmine Issue
 - *#75*（protech-mfg，功能）：ProTech-MFG 系統架構紀錄（單台 client-server + 多台 RPI5/OTA）。
   `http://blog.softsnail.com:2024/issues/75`
 - *#74*（protech-nas，臭蟲）：useradd 需透過 sudo（同期處理，非本專案）。
 - 註：本次 RPI5 console 上線除錯（udev/ser2net/console/md.b）*未另開 issue*，詳情見本檔上方各節。
+  （例外：md.b 解析 bug 已補開 *#76*，見上節。）
 
 
 
