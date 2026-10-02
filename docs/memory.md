@@ -90,6 +90,22 @@
 - `ser2net.yaml` 註解更正安裝路徑（Raspberry Pi OS vs Ubuntu）。
 - 考慮 ser2net `trace-read` 檔名與 console 裝置綁定（目前寫死 `ttyUSB0.log`）。
 
+### Step 2 ReadHwVersion 失敗：md.b 輸出被殘留 prompt 太早命中（已修）
+- 症狀：Step 2 報 `Cannot parse eth0 MAC`，送 `md.b` 後 console 瞬間 closed → FAILED。
+- 根因：U-Boot 每個指令回顯 prompt，上一指令會留殘留 `MT7981> ` 在 buffer。
+  `_read_eth_mac` 送 md.b 後用 `expect(prompt)` 取輸出，但 expect *立刻命中殘留 prompt*
+  （在 hex 資料出現前返回），`before` 只有 `' \r\n'` → regex NO MATCH。
+- 修法（`src/mfg/manufacturing_script.py`）：送指令前先 `drain()`，然後 expect
+  *md.b 的位址行*（如 `4600002a:`，只在真實輸出出現），而非等 prompt。
+  `_read_eth_mac`、`_read_sn_model` 皆改。
+- *實機驗證通過*：live EAP111 讀到 eth0/eth1/ar0 = `5C:17:83:ED:EA:38/39/3A`（連續值正確）。
+
+### 關聯 Redmine Issue
+- *#75*（protech-mfg，功能）：ProTech-MFG 系統架構紀錄（單台 client-server + 多台 RPI5/OTA）。
+  `http://blog.softsnail.com:2024/issues/75`
+- *#74*（protech-nas，臭蟲）：useradd 需透過 sudo（同期處理，非本專案）。
+- 註：本次 RPI5 console 上線除錯（udev/ser2net/console/md.b）*未另開 issue*，詳情見本檔上方各節。
+
 
 
 ## 下一步（Task 3：OTA 中控）
