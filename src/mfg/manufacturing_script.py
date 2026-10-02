@@ -270,16 +270,23 @@ class ManufacturingScript:
     def _read_eth_mac(self, offset, label):
         """Read 6-byte MAC at memory offset; return formatted MAC string."""
         import re
-        # Send without letting _uboot_send consume the prompt, then capture the
-        # command output from expect()'s return value (Console has no getBuffer).
+        # U-Boot echoes the prompt BEFORE a command's output and often leaves a
+        # trailing "MT7981> " in the buffer from the previous command. If we
+        # just expect(prompt) after sending md.b, it matches that stale/echoed
+        # prompt immediately and `before` is empty (no hex) -> parse failure.
+        # Fix: drain stale buffer first, then expect the md.b ADDRESS line
+        # (e.g. "4600002a: 5c 17 83 ed ea 38") which only appears in the actual
+        # command output, not in the echo. offset like "0x4600002A" -> the dump
+        # address is the lowercase hex without the 0x prefix.
+        self.console.drain(quiet=0.3, max_total=3.0)
+        addr = offset.lower().replace('0x', '')
         self._uboot_send(f'md.b {offset} 0x6', expect_prompt=False)
-        buff = self.console.expect(self.uboot_prompt, timeout=10)
-        m = re.search(
-            r':\s+([0-9a-f]{2}\s+[0-9a-f]{2}\s+[0-9a-f]{2}\s+[0-9a-f]{2}\s+[0-9a-f]{2}\s+[0-9a-f]{2})',
-            buff,
-        )
+        # Match the address line plus its 6 hex bytes in one go.
+        pat = (addr + r':\s+([0-9a-fA-F]{2}(?:\s+[0-9a-fA-F]{2}){5})')
+        buff = self.console.expect(pat, timeout=10)
+        m = re.search(pat, buff)
         if not m:
-            raise RuntimeError(f'Cannot parse {label} MAC from buffer')
+            raise RuntimeError(f'Cannot parse {label} MAC from buffer: {buff!r}')
         mac_hex = m.group(1)
         return self._parse_mac_from_hex(mac_hex)
 
@@ -292,8 +299,18 @@ class ManufacturingScript:
         every dump line and convert to ASCII.
         """
         import re
+        # Same stale-prompt hazard as _read_eth_mac: drain first so expect does
+        # not match a leftover prompt before the dump appears. We expect the
+        # first address line to appear, then also capture whatever more arrived
+        # (multi-line dumps), tolerating the trailing prompt.
+        self.console.drain(quiet=0.3, max_total=3.0)
+        start = offset.lower().replace('0x', '')
         self._uboot_send(f'md.b {offset} {length}', expect_prompt=False)
-        buff = self.console.expect(self.uboot_prompt, timeout=10)
+        # Wait until the dump's starting address line shows up, then read the
+        # rest up to the prompt to collect all dump lines.
+        first = self.console.expect(start + r':', timeout=10)
+        rest = self.console.expect(self.uboot_prompt, timeout=10)
+        buff = first + rest
         hex_bytes = []
         for line in buff.splitlines():
             # Split "<addr>: <hex column>  <ascii>" — the hex column is between
