@@ -5,6 +5,8 @@ reports/
 src/web/data/*.db
 src/web/data/*.db-shm
 src/web/data/*.db-wal
-scripts/MFG/generated/*.py
+# GUI-generated test scripts are build artifacts, never version-controlled.
+scripts/MFG/generated/*
+!scripts/MFG/generated/.gitkeep
 tftp/*
 !tftp/.gitkeep
