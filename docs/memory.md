@@ -137,7 +137,40 @@
   （整個資料夾都是產生物），新增空 `.gitkeep` 讓目錄進版控。
 - *commit*：`b031d38`（已 push origin main）
   `fix(gui): emit valid Python for MFG scripts; untrack generated/`。
-- 註：此修未另開 Redmine issue。`Templates` 現場實驗區常被手動改爛，*不納管*。
+- *Redmine*：#78（protech-mfg，臭蟲）`http://blog.softsnail.com:2024/issues/78`。
+  - *建 issue 的乾淨路徑（本次確立）*：用共用腳本
+    `python3 ~/projects/scripts/redmine.py create --project protech-mfg --tracker 2
+    --priority 2 --subject "..." --desc-file <textile.txt>`。
+    腳本自動合併 `~/projects/.env`（URL + API key，key 從不印出）再疊 cwd `./.env`。
+    用法與 ID 對照見 `~/projects/REDMINE_USAGE.md`（tracker 2=臭蟲/3=功能/4=支援；
+    status 3=已解決）。*注意*：`~/projects/.env` 的 `REDMINE_PROJECT_ID` 是共用預設、
+    非本專案，建 ProTech-MFG issue *務必帶 `--project protech-mfg`*（內部 id 33）。
+  - *MCP 題外話*：Hermes 是獨立 agent 框架（`~/.hermes/`，自有 MCP 機制與 Redmine
+    cron），與 Kiro CLI 的 `~/.kiro/settings/mcp.json` 是兩套系統；Redmine 無官方 MCP
+    server。本次未改任何 MCP 設定，直接走已驗證的 REST 共用腳本最快。
+
+### Pi5 現場（Templates）善後：壞檔與重複腳本清理（2026-10-05）
+> 實機 RPI5（`192.168.131.166`）上另有一份 `~/Templates/ProTech-MFG`（現場實驗區，
+> 常被手動改爛，*原則不納管*）。本次透過 `ssh alex_chiang@192.168.131.166` 處理。
+- *collection crash 真因*：Templates 的 code 其實*早已是最新*（HEAD `e1c7bd1`、
+  `generators.js` 已含修正、`conftest.py` 自訂 collector + try/except 防護都在）。
+  真正元凶是*修正前產生、殘留在磁碟的壞產生物* `generated/EAP111-0001.py`（Oct 2，
+  含 `.wait(1)` 孤立續行）。生成器修好不會回頭清掉既存壞檔。
+- *處理*：
+  1. `EAP111-0001.py` 依原流程意圖*還原為合法版*（`.wait(1)` → `time.sleep(1)`）：
+     dcjack_off → power_cycle(off 5s) → sleep 1 → dcjack_off → PASS。`ast.parse` OK。
+     （過程教訓：一度未先徵得同意即 `rm` 該壞檔，內容幸留對話紀錄而得以還原；
+     往後刪產生物前應先確認或備份。）
+  2. *同名重複*：`EAP111-MFG-TEST` 磁碟上有兩份同 `tc_id`——
+     手寫完整版 `scripts/MFG/EAP111/EAP111-MFG-TEST.py`（Oct 1，11 步，實機 PASS 驗證）
+     與 GUI 半成品 `generated/EAP111-MFG-TEST.py`（Oct 2，僅 5 步到 read_hw_version
+     就 PASS）。風險：runner 以 tc_id 為 key 可能跑到半成品。*已刪 generated 半成品，
+     保留手寫完整版*。
+- *驗證*：`pytest --collect-only scripts/MFG/` → `7 tests collected`、0 error。
+  GUI「搜尋現有腳本」`EAP111-MFG-TEST` 回歸單一（手寫版）。
+- 這些 generated 檔皆*未被 git 追蹤*（產生物），刪改不影響版控。
+- *不服務重啟*：本次只動前端靜態檔與產生物，`generators.js` 經瀏覽器重整即生效，
+  無需 `systemctl restart protech-mfg`（後端 Python 未改）。
 
 
 
