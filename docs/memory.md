@@ -172,6 +172,34 @@
 - *不服務重啟*：本次只動前端靜態檔與產生物，`generators.js` 經瀏覽器重整即生效，
   無需 `systemctl restart protech-mfg`（後端 Python 未改）。
 
+### 新增 NWA1220 機種 + GRE 製造測試腳本（2026-10-05，commit 526c215）
+> 新機種 NWA1220（IPQ5332 + RTL8251B-CG，5GbE；與 SonicWall 721 同 PCBA）。
+> 為 Accton Redmine #77「GRE packet size issue」做一支製造測試腳本，驗證 Johnny
+> 建議的 jumbo frame 修正。站別 FDL、SKU WW。
+- *新增三件*（機種支援缺一不可，否則 conftest 會 fallback 到 eap111 testbed）：
+  - `config/profiles/NWA1220.yaml`（eth0 5G）
+  - `config/test_node/nwa1220_testbed.yaml`（DUT 192.168.1.1；PC endpoint 192.168.1.100；
+    *新增可設定欄位 `pc.user` / `pc.sudo`*——PC 端建 GRE tunnel 需 root，user=root 時 sudo=""，
+    一般使用者則 sudo="sudo" 且需 NOPASSWD）
+  - `scripts/MFG/NWA1220/NWA1220-GRE-001.py`（繼承 ManufacturingScript，仿 EAP111-TP-002
+    的 SSH+iperf3 模式）
+- *腳本流程（8 步）*：建對稱 GRE tunnel → 驗連通 → MTU 分片臨界(1448 PASS/1449 FAIL)
+  → baseline(1476) 壓測量*吞吐達成率* → 套 jumbo(9018/8994) → 驗 DF 8000 不分片
+  → jumbo 壓測 → 判定。*pass = baseline 達成率 ≤30%（重現 issue）且 jumbo ≥80%（修正有效）*。
+  （用吞吐達成率 receiver/sender，不用丟包率——丟包率因分母差異會誤導，詳見
+  `~/GRE-Test/reports/2026-10-05_5G_CPU100_repro.md`。）
+- *框架整合已驗證（開發機 + RPI5 皆綠）*：載入 OK（tc_id/station/model 正確）、
+  conftest 依 model=NWA1220 自動選 `nwa1220_testbed.yaml`、`pytest --collect-only` 收 1 項。
+- *實跑受阻（環境限制，非腳本問題）*：
+  - *開發機*：DUT 端 SSH 正常（root 秒通、tunnel 建/刪成功），但*PC 端 sudo 需互動密碼* →
+    `_pc_ssh("sudo ip ...")` 無法非互動執行 → PC tunnel 建不起、Step 2 連通失敗。
+  - *RPI5*：連 DUT 都連不到——RPI5 在 `192.168.131.0/24`，*無 192.168.1.0/24 介面*，
+    ping DUT 192.168.1.1 / PC 192.168.1.100 皆 100% loss → Step 1 DUT SSH 15s timeout。
+  - *結論*：GRE 測試的實體接線（PC eno2 ↔ DUT eth0）在*開發機*上，**實跑要在開發機**，
+    不是 RPI5（RPI5 僅作 code 分發的另一 checkout）。且需先在 Test PC 設*免密碼 SSH +
+    NOPASSWD sudo for `ip`*（或改用 root SSH + `pc.sudo=""`），腳本才能全自動跑完。
+- *待辦*：Test PC(192.168.1.100) 一次性設定免密碼 SSH + NOPASSWD sudo → 回開發機實跑驗 pass。
+
 
 
 ## 下一步（Task 3：OTA 中控）
