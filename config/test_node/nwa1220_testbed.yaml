@@ -1,0 +1,48 @@
+ap:
+  model: NWA1220
+  # NWA1220 = IPQ5332 + RTL8251B-CG (same PCBA as SonicWall 721).
+  # Used here for the GRE packet-size / fragmentation CPU test (Accton #77).
+  console:
+    type: telnet
+    port: 127.0.0.1:5001
+    baudrate: 115200
+    prompt: "root@"          # OpenWrt shell prompt (adjust to actual)
+    cmd_delay: 0
+  ssh:
+    ip: 192.168.1.1          # DUT underlay / management IP (GRE local endpoint on DUT side)
+    user: root
+    password: ""
+  # GRE test underlay interfaces on the DUT (used by EAP111-GRE-001-style scripts).
+  gre_underlay_iface: eth0
+  gre_bridge: br-lan
+  tftp:
+    server_ip: 192.168.1.2
+    device_ip: 192.168.1.1
+    port: 69
+    directory: "/home/alex_chiang/projects/ProTech-MFG/tftp"
+  mfg:
+    model: "NWA1220"
+    default_sku: "WW"
+    skus:
+      WW:
+        sku: "NWA1220(WW)"
+        certification_region: "WW"
+
+pc:
+  label: "Test PC (GRE endpoint)"
+  ip: 192.168.1.100          # PC underlay IP = GRE local endpoint on PC side
+  # SSH user on the Test PC — configurable here per testbed.
+  #   user: root   + sudo: ""      -> root SSH, no sudo prefix (simplest, if root SSH allowed)
+  #   user: <name> + sudo: "sudo"  -> normal user with NOPASSWD sudo for `ip`
+  # Prerequisite for unattended runs (either case): the Test PC must accept
+  # NON-INTERACTIVE SSH from the fixture host (key-based, no password prompt).
+  # Current env note: 192.168.1.100 has NO passwordless SSH set up yet, and the
+  # normal user needs an interactive sudo password — so the PC side cannot run
+  # unattended until (a) an SSH key is deployed AND (b) root SSH or NOPASSWD
+  # sudo for /usr/sbin/ip,/sbin/ip is configured on the Test PC.
+  user: alex_chiang
+  password: ""
+  sudo: "sudo"               # "" if `user` is root
+  gre_underlay_iface: eno2
+  iperf:
+    server_port: 5201

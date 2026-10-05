@@ -1,0 +1,7 @@
+name: NWA1220
+type: ap
+# IPQ5332 + RTL8251B-CG (5 GbE PHY). Same PCBA as SonicWall 721.
+ports:
+  ethernet:
+    - {name: "eth0", speed: "5G"}
+api: ucentral
