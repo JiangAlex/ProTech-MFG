@@ -108,6 +108,37 @@
 - 註：本次 RPI5 console 上線除錯（udev/ser2net/console/md.b）*未另開 issue*，詳情見本檔上方各節。
   （例外：md.b 解析 bug 已補開 *#76*，見上節。）
 
+## GUI code generator 產出非法 Python：fluent 續行變孤立縮排行（已修，2026-10-05）
+- *症狀*：`Templates/ProTech-MFG`（現場實驗區）跑 pytest，collect
+  `scripts/MFG/generated/EAP111-0001.py` 時 `IndentationError: unexpected indent`
+  （`.wait(1)` 單獨成行、帶縮排）→ collection 中斷。
+  `projects/ProTech-MFG`（乾淨區）現有三個 generated 檔*本來就合法*，未受影響；
+  但生成器根源缺口在這份也存在，只是還沒被觸發（治本而非等壞檔出現）。
+- *根因*（`src/web/static/generators.js`）：MFG template 要「扁平 bare statement」
+  （如 `self.foo()`，再統一補 12 空格縮排）。但部分 block 的 generator 仍回傳*舊
+  WLAN fluent 格式* `'    .foo()\n'`（帶縮排 + 開頭 `.`），給舊 `Block(self).chain()`
+  template 用。掉進 MFG template 就變成孤立的 `.method()` 縮排行 → SyntaxError。
+  MFG toolbox（index.html）實際只暴露 `wait_seconds`（已有 mfg 分支吐 `time.sleep`）、
+  `message`、`atlas_*`、`qcc_*`、`console_*`、`pdu_power_cycle`——其中*唯一*仍吐 fluent
+  且會被實際使用的是 `message`。WLAN/SW block（`band_*`/`verify_*`/`sw_*`…）已*不在*
+  toolbox，且其方法在 `ManufacturingScript` 也不存在（只有 `message` 存在）。
+- *修法*（分層，`src/web/static/generators.js`）：
+  1. 治本：`message` block 補 `devType==='mfg'` 分支 → 吐 bare `self.message(...)`
+     （mirror 既有 `wait_seconds`）。這是 toolbox 內唯一的壞 block。
+  2. 防禦（safety net）：`generateTestFile` 的 mfg 組裝點加
+     `blockCode.replace(/^[ \t]*\.([A-Za-z_]\w*\()/gm, 'self.$1')`，把任何殘留
+     fluent 續行正規化為 bare，防舊 workspace / 匯入 JSON 殘留已下架 block 再度
+     crash collection。*不*逐一改 20+ 個 WLAN generator（已不在 toolbox，屬過度工程）。
+- *驗證*：`ast.parse` 對 realistic MFG 用法 + stale fluent 兩情境皆 PARSE OK；
+  實跑 `pytest --collect-only scripts/MFG/generated/` 收集 3 檔 0 錯誤。原本可執行的
+  三個檔未被動到。
+- *git*：`generated/` 原本就*未被追蹤*（`git ls-files` 空）。`.gitignore` 規則由
+  `scripts/MFG/generated/*.py` 擴大為 `scripts/MFG/generated/*` + `!.gitkeep`
+  （整個資料夾都是產生物），新增空 `.gitkeep` 讓目錄進版控。
+- *commit*：`b031d38`（已 push origin main）
+  `fix(gui): emit valid Python for MFG scripts; untrack generated/`。
+- 註：此修未另開 Redmine issue。`Templates` 現場實驗區常被手動改爛，*不納管*。
+
 
 
 ## 下一步（Task 3：OTA 中控）
